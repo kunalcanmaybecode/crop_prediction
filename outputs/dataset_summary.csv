@@ -1,0 +1,4 @@
+Crop Class,Total Fields,Train Fields,Test Fields,Mean Area (ha),Min Area (ha),Max Area (ha),Total Area (ha)
+Wheat,244,198,46,0.31,0.02,2.26,75.57
+Mustard,101,81,20,0.314,0.04,1.935,31.67
+Maize,16,13,3,0.273,0.08,0.66,4.37
