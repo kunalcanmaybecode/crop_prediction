@@ -99,7 +99,8 @@ def get_s2_composite(
     scaled_coll = s2_with_cs.map(scale_and_retain_qa)
     
     # Quality mosaic selects the observation with the maximum clear sky score ('cs')
-    composite = scaled_coll.qualityMosaic(CLOUD_SCORE_BAND).select(optical_bands).clip(roi)
+    # Note: Avoid eager .clip(roi) across massive states to prevent unnecessary geometry intersection overhead
+    composite = scaled_coll.qualityMosaic(CLOUD_SCORE_BAND).select(optical_bands)
     return composite
 
 

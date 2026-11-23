@@ -143,18 +143,29 @@ elif section == "Phenology Curves (NDVI)":
 
 # Section 4: Crop Classification Map
 elif section == "Crop Classification Map":
-    st.header("🗺️ Regional Crop Classification Map")
+    import folium
+    from streamlit_folium import st_folium
+    import geopandas as gpd
+
+    st.header("🗺️ Regional Crop Classification Map (Uttar Pradesh)")
     st.markdown(
         """
-        Cartographic classification map over the Uttar Pradesh study region.
-        Each field pixel is assigned to one of the 3 target crops based on its seasonal spectral signature.
+        **Geographic Context:** The ground reference fields are located across the 
+        **Bahraich – Gonda – Sitapur agricultural corridor** in Central/Eastern Uttar Pradesh 
+        (centered near $27.50^{\\circ}\\text{N}, 82.45^{\\circ}\\text{E}$ along the Ghaghara basin). 
+        This alluvial belt exhibits high agricultural productivity during the Rabi season, featuring
+        rotations of **Wheat**, **Mustard**, and **Maize**.
         """
     )
     
     col_a, col_b = st.columns([3, 1])
     with col_a:
         if CROP_MAP_PNG.exists():
-            st.image(str(CROP_MAP_PNG), caption="Classified Crop Map (Green: Wheat, Pink/Yellow: Mustard, Orange: Maize)", use_container_width=True)
+            st.image(
+                str(CROP_MAP_PNG),
+                caption="High-Resolution Classification Map (Bahraich-Gonda Agricultural Belt, UP)",
+                use_container_width=True
+            )
         else:
             st.info("Classification map will be rendered here upon running the mapping stage.")
 
@@ -162,14 +173,59 @@ elif section == "Crop Classification Map":
         st.subheader("Map Legend")
         st.markdown(
             """
-            - 🟩 **Wheat** (Code 1)
-            - 🟨 **Mustard** (Code 2)
-            - 🟧 **Maize** (Code 3)
-            - ⬜ **Non-target / Background**
+            - 🟩 **Wheat** (Rabi Cereal, Code 1)
+            - 🟨 **Mustard** (Rabi Oilseed, Code 2)
+            - 🟧 **Maize** (Coarse Grain, Code 3)
+            - ⬜ **Background / Non-crop**
             """
         )
         if CROP_MAP_TIF.exists():
             with open(CROP_MAP_TIF, "rb") as f:
                 st.download_button("📥 Download GeoTIFF", f, file_name="crop_classification_map.tif", mime="image/tiff")
+
+    # Interactive Satellite & Field Explorer
+    st.subheader("🌍 Interactive Field Explorer (Satellite Basemap)")
+    st.markdown("Pan and zoom to inspect individual agricultural fields delineated in Uttar Pradesh:")
+    
+    labels_geojson = BASE_DIR / "data" / "labels" / "agrifieldnet_fields.geojson"
+    if labels_geojson.exists():
+        try:
+            gdf_fields = gpd.read_file(labels_geojson)
+            # Center on core cluster
+            m = folium.Map(location=[27.50, 82.45], zoom_start=11, tiles="CartoDB positron")
+            folium.TileLayer(
+                tiles="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+                attr="Google Satellite",
+                name="Google Satellite (Hybrid)",
+                overlay=False
+            ).add_to(m)
+
+            color_map = {"Wheat": "#2ca02c", "Mustard": "#e377c2", "Maize": "#ff7f0e"}
+            
+            # Filter to core viewing region so the map loads instantaneously
+            core_sub = gdf_fields[
+                (gdf_fields.geometry.centroid.x >= 82.15) & (gdf_fields.geometry.centroid.x <= 82.75) &
+                (gdf_fields.geometry.centroid.y >= 27.35) & (gdf_fields.geometry.centroid.y <= 27.65)
+            ].head(100)
+
+            for _, row in core_sub.iterrows():
+                c = row.get("crop_name", "Wheat")
+                fid = row.get("field_id", "N/A")
+                area = round(row.get("area_ha", 0.0), 2)
+                color = color_map.get(c, "#2ca02c")
+                
+                # Add GeoJson with styled popup
+                popup_html = f"<b>Field ID:</b> {fid}<br><b>Crop:</b> {c}<br><b>Area:</b> {area} ha"
+                folium.GeoJson(
+                    row.geometry,
+                    style_function=lambda x, col=color: {"fillColor": col, "color": col, "weight": 2, "fillOpacity": 0.65},
+                    tooltip=f"Field {fid}: {c}",
+                    popup=folium.Popup(popup_html, max_width=250)
+                ).add_to(m)
+
+            folium.LayerControl().add_to(m)
+            st_folium(m, width=900, height=450)
+        except Exception as e:
+            st.warning(f"Interactive map preview unavailable: {e}")
 
 st.divider()

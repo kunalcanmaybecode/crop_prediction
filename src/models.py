@@ -65,21 +65,25 @@ def train_and_evaluate_models(
     print("Machine Learning Training & Honest Evaluation")
     print("=" * 60)
     
+    from imblearn.over_sampling import SMOTE
+
+    print(f"[*] Training distribution before SMOTE: {dict(y_train.value_counts())}")
+    smote = SMOTE(random_state=RANDOM_STATE)
+    X_train_res, y_train_res = smote.fit_resample(X_train, y_train)
+    print(f"[+] Training distribution after SMOTE: {dict(pd.Series(y_train_res).value_counts())}")
+
     models = {
         "Random Forest": RandomForestClassifier(
-            n_estimators=150,
+            n_estimators=200,
             max_depth=12,
             min_samples_split=4,
-            class_weight="balanced",
             random_state=RANDOM_STATE,
             n_jobs=-1
         ),
         "Support Vector Machine": SVC(
             kernel="rbf",
-            C=10.0,
+            C=15.0,
             gamma="scale",
-            probability=True,
-            class_weight="balanced",
             random_state=RANDOM_STATE
         )
     }
@@ -89,8 +93,8 @@ def train_and_evaluate_models(
     trained_models = {}
 
     for name, clf in models.items():
-        print(f"\n[*] Training {name}...")
-        clf.fit(X_train, y_train)
+        print(f"\n[*] Training {name} on balanced resampled feature space...")
+        clf.fit(X_train_res, y_train_res)
         y_pred = clf.predict(X_test)
         trained_models[name] = clf
 

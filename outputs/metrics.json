@@ -1,81 +1,81 @@
 {
     "Random Forest": {
-        "overall_accuracy": 0.6522,
-        "cohen_kappa": 0.2847,
-        "macro_f1": 0.4258,
-        "weighted_f1": 0.6474,
+        "overall_accuracy": 0.6179,
+        "cohen_kappa": 0.2438,
+        "macro_f1": 0.4234,
+        "weighted_f1": 0.6452,
         "per_class": {
             "Wheat": {
-                "precision": 0.7805,
-                "recall": 0.6957,
-                "f1": 0.7356
+                "precision": 0.7941,
+                "recall": 0.7074,
+                "f1": 0.7483
             },
             "Mustard": {
-                "precision": 0.4643,
-                "recall": 0.65,
-                "f1": 0.5417
+                "precision": 0.4889,
+                "recall": 0.4835,
+                "f1": 0.4862
             },
             "Maize": {
-                "precision": 0.0,
-                "recall": 0.0,
-                "f1": 0.0
+                "precision": 0.0244,
+                "recall": 0.0667,
+                "f1": 0.0357
             }
         },
         "confusion_matrix": [
             [
-                32,
-                14,
-                0
+                162,
+                38,
+                29
             ],
             [
-                7,
-                13,
-                0
+                36,
+                44,
+                11
             ],
             [
-                2,
-                1,
-                0
+                6,
+                8,
+                1
             ]
         ]
     },
     "Support Vector Machine": {
-        "overall_accuracy": 0.6087,
-        "cohen_kappa": 0.3536,
-        "macro_f1": 0.5126,
-        "weighted_f1": 0.6522,
+        "overall_accuracy": 0.5463,
+        "cohen_kappa": 0.2174,
+        "macro_f1": 0.4305,
+        "weighted_f1": 0.6002,
         "per_class": {
             "Wheat": {
-                "precision": 0.8966,
-                "recall": 0.5652,
-                "f1": 0.6933
+                "precision": 0.8012,
+                "recall": 0.5808,
+                "f1": 0.6734
             },
             "Mustard": {
-                "precision": 0.56,
-                "recall": 0.7,
-                "f1": 0.6222
+                "precision": 0.5057,
+                "recall": 0.4835,
+                "f1": 0.4944
             },
             "Maize": {
-                "precision": 0.1333,
-                "recall": 0.6667,
-                "f1": 0.2222
+                "precision": 0.0732,
+                "recall": 0.4,
+                "f1": 0.1237
             }
         },
         "confusion_matrix": [
             [
-                26,
-                10,
-                10
+                133,
+                37,
+                59
+            ],
+            [
+                30,
+                44,
+                17
             ],
             [
                 3,
-                14,
-                3
-            ],
-            [
-                0,
-                1,
-                2
+                6,
+                6
             ]
         ]
     }

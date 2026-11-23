@@ -49,56 +49,55 @@ from src.models import train_and_evaluate_models
 from src.mapping import export_classification_map
 
 
-def extract_field_features(gdf: gpd.GeoDataFrame, composites: dict) -> pd.DataFrame:
+def extract_field_features(gdf: gpd.GeoDataFrame, chunk_size: int = 100) -> pd.DataFrame:
     """
     Extract median spectral reflectance per field polygon across all seasonal composites
-    using fast server-side batch Earth Engine reduceRegions.
+    using fast server-side batch Earth Engine reduceRegions chunked by local spatial bounds.
     """
     import shapely.geometry
-    print(f"[*] Extracting multi-temporal Sentinel-2 features across {len(composites)} time steps...")
+    from src.gee_utils import get_s2_composite
+    print(f"[*] Extracting multi-temporal Sentinel-2 features for {len(gdf)} fields across {len(TIME_STEPS)} time steps...")
     
-    # Build ee.FeatureCollection from field polygons
-    features = []
-    for idx, row in gdf.iterrows():
-        geom_json = shapely.geometry.mapping(row.geometry)
-        props = {
-            "field_id": int(row["field_id"]),
-            "crop_name": str(row["crop_name"]),
-            "area_ha": float(row.get("area_ha", 0.0)),
-            "tile_id": str(row.get("tile_id", f"tile_{idx}"))
-        }
-        features.append(ee.Feature(ee.Geometry(geom_json), props))
+    all_rows = []
+    num_chunks = int(np.ceil(len(gdf) / chunk_size))
+    
+    for c_idx in range(num_chunks):
+        chunk_gdf = gdf.iloc[c_idx * chunk_size : (c_idx + 1) * chunk_size]
+        minx, miny, maxx, maxy = [float(x) for x in chunk_gdf.total_bounds]
+        chunk_roi = ee.Geometry.Rectangle([minx - 0.05, miny - 0.05, maxx + 0.05, maxy + 0.05])
         
-    fc = ee.FeatureCollection(features)
-    
-    # Stack all monthly composites into a single multi-band image with renamed bands
-    stacked_bands = []
-    for period_name, comp_img in composites.items():
-        renamed = comp_img.select(
-            ["B2", "B3", "B4", "B8", "B11"],
-            [f"{period_name}_B2", f"{period_name}_B3", f"{period_name}_B4", f"{period_name}_B8", f"{period_name}_B11"]
+        print(f"    -> Querying GEE batch {c_idx + 1}/{num_chunks} ({len(chunk_gdf)} fields)...", flush=True)
+        
+        composites = {label: get_s2_composite(chunk_roi, s, e) for s, e, label in TIME_STEPS}
+        stacked_image = ee.Image.cat([
+            comp.select(["B2", "B3", "B4", "B8", "B11"], [f"{lbl}_B2", f"{lbl}_B3", f"{lbl}_B4", f"{lbl}_B8", f"{lbl}_B11"])
+            for lbl, comp in composites.items()
+        ])
+        
+        features = []
+        for idx, row in chunk_gdf.iterrows():
+            geom_json = shapely.geometry.mapping(row.geometry)
+            props = {
+                "field_id": int(row["field_id"]),
+                "crop_name": str(row["crop_name"]),
+                "area_ha": float(row.get("area_ha", 0.0)),
+                "tile_id": str(row.get("tile_id", f"tile_{idx}"))
+            }
+            features.append(ee.Feature(ee.Geometry(geom_json), props))
+            
+        fc = ee.FeatureCollection(features)
+        reduced_fc = stacked_image.reduceRegions(
+            collection=fc,
+            reducer=ee.Reducer.median(),
+            scale=10
         )
-        stacked_bands.append(renamed)
         
-    stacked_image = ee.Image.cat(stacked_bands)
-    
-    # Perform server-side batch reduction over all fields simultaneously
-    reduced_fc = stacked_image.reduceRegions(
-        collection=fc,
-        reducer=ee.Reducer.median(),
-        scale=10
-    )
-    
-    # Download tabular results in one request
-    results = reduced_fc.getInfo()
-    
-    rows = []
-    for feat in results["features"]:
-        props = feat["properties"]
-        rows.append(props)
-        
-    df = pd.DataFrame(rows)
-    # Drop fields with any null bands
+        results = reduced_fc.getInfo()
+        for feat in results["features"]:
+            props = feat["properties"]
+            all_rows.append(props)
+
+    df = pd.DataFrame(all_rows)
     df = df.dropna().reset_index(drop=True)
     print(f"[+] Successfully extracted complete time-series features for {len(df)} fields.")
     return df
@@ -139,20 +138,19 @@ def run_pipeline():
     # Save dataset summary table for Chapter 3 of report
     summary_df = generate_dataset_summary(gdf_buffered, train_gdf, test_gdf)
 
-    # 3. Build Composites & Extract Features
-    print("\n[Stage 2 & 3] Building Cloud Score+ Sentinel-2 median composites...")
-    bounds = tuple(gdf_buffered.total_bounds)
-    minx, miny, maxx, maxy = bounds
-    roi_ee = ee.Geometry.Rectangle([minx, miny, maxx, maxy])
-    composites = build_seasonal_composites(roi_ee)
-
-    # Extract time series features
-    raw_features_df = extract_field_features(gdf_buffered, composites)
-    
-    # Compute Vegetation Indices (NDVI, EVI, NDWI)
+    # 3. Extract Features via Cloud Score+ Sentinel-2 Composites
+    features_csv = PROCESSED_DATA_DIR / "field_features_all.csv"
     time_labels = [step[2] for step in TIME_STEPS]
-    features_df = compute_spectral_indices_np(raw_features_df, time_labels)
-    features_df.to_csv(PROCESSED_DATA_DIR / "field_features_all.csv", index=False)
+    
+    if features_csv.exists() and len(pd.read_csv(features_csv)) == len(gdf_buffered):
+        print(f"[*] Loading cached multi-temporal features for {len(gdf_buffered)} fields...")
+        features_df = pd.read_csv(features_csv)
+    else:
+        print("\n[Stage 2 & 3] Extracting multi-temporal Sentinel-2 features (Cloud Score+ QA)...")
+        raw_features_df = extract_field_features(gdf_buffered)
+        features_df = compute_spectral_indices_np(raw_features_df, time_labels)
+        features_df.to_csv(features_csv, index=False)
+        print(f"[+] Saved extracted feature matrix to {features_csv}")
     
     # Plot phenology trajectories
     print("\n[Stage 3] Plotting NDVI phenology curves...")
@@ -184,21 +182,18 @@ def run_pipeline():
 
     # 6. Generate Crop Classification Map
     print("\n[Stage 6] Exporting Crop Classification Map...")
-    # Generate raster grid over ROI
-    grid_size = 200
-    grid_x = np.linspace(minx, maxx, grid_size)
-    grid_y = np.linspace(miny, maxy, grid_size)
-    
     rf_model = eval_results["models"]["Random Forest"]
-    # Predict on test raster
-    mock_samples = test_df[feature_cols].values
-    preds = rf_model.predict(mock_samples)
-    crop_to_int = {"Wheat": 1, "Mustard": 2, "Maize": 3}
-    int_preds = np.array([crop_to_int.get(c, 0) for c in preds])
+    features_df["predicted_crop"] = rf_model.predict(features_df[feature_cols])
     
-    # Tile into spatial map representation
-    map_grid = np.random.choice(int_preds, size=(grid_size, grid_size))
-    export_classification_map(map_grid, bounds)
+    # Merge predictions with georeferenced field polygons
+    classified_gdf = gdf_buffered.merge(
+        features_df[["field_id", "predicted_crop"]],
+        on="field_id",
+        how="inner"
+    )
+    # The Bahraich-Gonda agricultural belt in Uttar Pradesh
+    core_bounds = (82.15, 27.35, 82.75, 27.65)
+    export_classification_map(classified_gdf, bounds=core_bounds)
 
     print("\n" + "=" * 70)
     print("STAGES 1 - 7 COMPLETE!")
