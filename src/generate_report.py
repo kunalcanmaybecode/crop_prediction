@@ -19,6 +19,8 @@ Strictly follows the BIT Mesra Project Report Template:
 - Body in Arabic numerals (Page | 1 to Page | N).
 - Embedded figures from outputs/ and real metrics from outputs/metrics.json, dataset_summary.csv, model_comparison.csv.
 - Clearly marked <PLACEHOLDERS> for student names, roll numbers, guide names, dates.
+- Native Office Math (OMML) equations with right-aligned numbering (3.1 to 3.8).
+- Professional Table of Contents with native Word dot leaders and chapter hierarchy.
 """
 
 import os
@@ -29,7 +31,7 @@ import docx
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import nsdecls, qn
 
@@ -50,7 +52,7 @@ def set_cell_background(cell, fill_hex):
     shd = parse_xml(f'<w:shd {nsdecls("w")} w:fill="{fill_hex}"/>')
     tcPr.append(shd)
 
-def set_cell_margins(cell, top=100, bottom=100, left=150, right=150):
+def set_cell_margins(cell, top=80, bottom=80, left=120, right=120):
     """Set inner padding for table cell in twips (1/20 pt)."""
     tcPr = cell._tc.get_or_add_tcPr()
     tcMar = parse_xml(
@@ -115,6 +117,272 @@ def add_heading_with_double_rule(doc, text):
     p_spacer.paragraph_format.space_before = Pt(6)
     p_spacer.paragraph_format.space_after = Pt(6)
     p_spacer.paragraph_format.line_spacing = 1.0
+
+# -------------------------------------------------------------
+# Mathematical Formula Helper (Native Office Math - OMML)
+# -------------------------------------------------------------
+
+def add_numbered_equation(doc, omml_xml, eq_num):
+    """
+    Renders an equation using native Word OMML Office Math,
+    centered horizontally with a right-aligned equation number (eq_num)
+    in a clean borderless 1-row table layout.
+    """
+    tbl = doc.add_table(rows=1, cols=2)
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    tbl.autofit = False
+    tbl.columns[0].width = Inches(5.4)
+    tbl.columns[1].width = Inches(0.8)
+    
+    # Borderless layout
+    tblPr = tbl._tbl.tblPr
+    borders = parse_xml(
+        f'<w:tblBorders {nsdecls("w")}>'
+        f'<w:top w:val="none"/>'
+        f'<w:bottom w:val="none"/>'
+        f'<w:left w:val="none"/>'
+        f'<w:right w:val="none"/>'
+        f'<w:insideH w:val="none"/>'
+        f'<w:insideV w:val="none"/>'
+        f'</w:tblBorders>'
+    )
+    tblPr.append(borders)
+    
+    # Column 0: Centered Equation in OMML
+    cell_eq = tbl.cell(0, 0)
+    set_cell_margins(cell_eq, top=40, bottom=40, left=40, right=40)
+    p_eq = cell_eq.paragraphs[0]
+    p_eq.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_eq.paragraph_format.space_before = Pt(2)
+    p_eq.paragraph_format.space_after = Pt(2)
+    p_eq._p.append(parse_xml(omml_xml))
+    
+    # Column 1: Right-aligned equation number
+    cell_num = tbl.cell(0, 1)
+    set_cell_margins(cell_num, top=40, bottom=40, left=40, right=40)
+    p_num = cell_num.paragraphs[0]
+    p_num.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    p_num.paragraph_format.space_before = Pt(2)
+    p_num.paragraph_format.space_after = Pt(2)
+    r_num = p_num.add_run(f"({eq_num})")
+    r_num.font.name = "Times New Roman"
+    r_num.font.size = Pt(11)
+    r_num.font.bold = True
+
+# Native OMML Math XML Definitions
+EQ_BUFFER = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>P</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>buffered</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> = </m:t></m:r>'
+    f'<m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>P</m:t></m:r>'
+    f'<m:r><m:t> ⊖ </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>d</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>buffer</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t>,   where  </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>d</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>buffer</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> = 5.0 meters</m:t></m:r>'
+    f'</m:oMath>'
+)
+
+EQ_NDVI = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:r><m:rPr><m:sty m:val="b"/></m:rPr><m:t>NDVI</m:t></m:r>'
+    f'<m:r><m:t> = </m:t></m:r>'
+    f'<m:f>'
+    f'<m:num>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>8 (NIR)</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>4 (Red)</m:t></m:r></m:sub></m:sSub>'
+    f'</m:num>'
+    f'<m:den>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>8 (NIR)</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> + </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>4 (Red)</m:t></m:r></m:sub></m:sSub>'
+    f'</m:den>'
+    f'</m:f>'
+    f'</m:oMath>'
+)
+
+EQ_EVI = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:r><m:rPr><m:sty m:val="b"/></m:rPr><m:t>EVI</m:t></m:r>'
+    f'<m:r><m:t> = 2.5 × </m:t></m:r>'
+    f'<m:f>'
+    f'<m:num>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>8 (NIR)</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>4 (Red)</m:t></m:r></m:sub></m:sSub>'
+    f'</m:num>'
+    f'<m:den>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>8</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> + 6.0 · </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>4</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − 7.5 · </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>2</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> + 1.0</m:t></m:r>'
+    f'</m:den>'
+    f'</m:f>'
+    f'</m:oMath>'
+)
+
+EQ_NDWI = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:r><m:rPr><m:sty m:val="b"/></m:rPr><m:t>NDWI</m:t></m:r>'
+    f'<m:r><m:t> = </m:t></m:r>'
+    f'<m:f>'
+    f'<m:num>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>8 (NIR)</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>11 (SWIR1)</m:t></m:r></m:sub></m:sSub>'
+    f'</m:num>'
+    f'<m:den>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>8 (NIR)</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> + </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>B</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>11 (SWIR1)</m:t></m:r></m:sub></m:sSub>'
+    f'</m:den>'
+    f'</m:f>'
+    f'</m:oMath>'
+)
+
+EQ_SMOTE = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>new</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> = </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>i</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> + λ · (</m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>zi</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>i</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t>),   where  λ ~ U(0, 1)</m:t></m:r>'
+    f'</m:oMath>'
+)
+
+EQ_GINI = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>I</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>G</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t>(</m:t></m:r>'
+    f'<m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>t</m:t></m:r>'
+    f'<m:r><m:t>) = 1 − </m:t></m:r>'
+    f'<m:nary>'
+    f'<m:naryPr><m:chr m:val="∑"/><m:limLoc m:val="undOvr"/></m:naryPr>'
+    f'<m:sub><m:r><m:t>c=1</m:t></m:r></m:sub>'
+    f'<m:sup><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>C</m:t></m:r></m:sup>'
+    f'<m:e>'
+    f'<m:sSup>'
+    f'<m:e><m:r><m:t>(p(c|t))</m:t></m:r></m:e>'
+    f'<m:sup><m:r><m:t>2</m:t></m:r></m:sup>'
+    f'</m:sSup>'
+    f'</m:e>'
+    f'</m:nary>'
+    f'</m:oMath>'
+)
+
+EQ_RBF = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>K</m:t></m:r>'
+    f'<m:r><m:t>(</m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>i</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t>, </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>j</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t>) = exp(−γ · ‖</m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>i</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>x</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>j</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t>‖²)</m:t></m:r>'
+    f'</m:oMath>'
+)
+
+EQ_KAPPA = (
+    f'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+    f'<m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>κ</m:t></m:r>'
+    f'<m:r><m:t> = </m:t></m:r>'
+    f'<m:f>'
+    f'<m:num>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>p</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>o</m:t></m:r></m:sub></m:sSub>'
+    f'<m:r><m:t> − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>p</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>e</m:t></m:r></m:sub></m:sSub>'
+    f'</m:num>'
+    f'<m:den>'
+    f'<m:r><m:t>1 − </m:t></m:r>'
+    f'<m:sSub><m:e><m:r><m:rPr><m:sty m:val="i"/></m:rPr><m:t>p</m:t></m:r></m:e>'
+    f'<m:sub><m:r><m:t>e</m:t></m:r></m:sub></m:sSub>'
+    f'</m:den>'
+    f'</m:f>'
+    f'</m:oMath>'
+)
+
+# -------------------------------------------------------------
+# Table of Contents Helper (Native Word Tab Dot Leaders)
+# -------------------------------------------------------------
+
+def add_toc_entry(doc, title, page_str, level=0, space_before=0, space_after=2):
+    """
+    Renders a clean TOC entry with native Word dot leaders (w:leader="dot")
+    anchored to the right margin (6.27 inches = 9028 dxa).
+    """
+    p = doc.add_paragraph()
+    p.paragraph_format.line_spacing = 1.15
+    p.paragraph_format.space_before = Pt(space_before)
+    p.paragraph_format.space_after = Pt(space_after)
+    
+    if level == 1:
+        p.paragraph_format.left_indent = Inches(0.25)
+    elif level == 2:
+        p.paragraph_format.left_indent = Inches(0.45)
+        
+    pPr = p._p.get_or_add_pPr()
+    tabs = parse_xml(
+        f'<w:tabs {nsdecls("w")}>'
+        f'<w:tab w:val="right" w:leader="dot" w:pos="9028"/>'
+        f'</w:tabs>'
+    )
+    pPr.append(tabs)
+    
+    r_t = p.add_run(title)
+    r_t.font.name = "Times New Roman"
+    if level == 0:
+        r_t.font.size = Pt(11)
+        r_t.font.bold = True
+    else:
+        r_t.font.size = Pt(10.5)
+        r_t.font.bold = False
+        
+    p.add_run("\t")
+    
+    r_p = p.add_run(page_str)
+    r_p.font.name = "Times New Roman"
+    if level == 0:
+        r_p.font.size = Pt(11)
+        r_p.font.bold = True
+    else:
+        r_p.font.size = Pt(10.5)
+        r_p.font.bold = False
 
 # -------------------------------------------------------------
 # Document Builder
@@ -281,7 +549,6 @@ def build_project_report():
     p_app_sig.paragraph_format.space_before = Pt(144)
     p_app_sig.paragraph_format.line_spacing = 1.2
     
-    # Table layout for clean date and guide signature alignment
     tbl_guide = doc.add_table(rows=1, cols=2)
     tbl_guide.alignment = WD_TABLE_ALIGNMENT.CENTER
     tbl_guide.autofit = False
@@ -481,83 +748,58 @@ def build_project_report():
     doc.add_page_break()
 
     # ---------------------------------------------------------
-    # FRONT MATTER: PAGE 7 - CONTENTS
+    # FRONT MATTER: PAGE 7 - CONTENTS (TABLE OF CONTENTS)
     # ---------------------------------------------------------
-    print("Generating Table of Contents...")
+    print("Generating Professional Table of Contents with Native Dot Leaders...")
     add_heading_with_double_rule(doc, "CONTENTS")
 
-    toc_items = [
-        ("ABSTRACT", "v"),
-        ("ACKNOWLEDGEMENT", "vi"),
-        ("LIST OF FIGURES", "viii"),
-        ("LIST OF TABLES", "ix"),
-        ("CHAPTER 1  INTRODUCTION", "1"),
-        ("    1.1  Background and Motivation", "1"),
-        ("    1.2  Problem Statement", "2"),
-        ("    1.3  Project Objectives", "3"),
-        ("    1.4  Scope and Organization of the Report", "4"),
-        ("CHAPTER 2  LITERATURE REVIEW", "5"),
-        ("    2.1  Earth Observation in Agricultural Monitoring", "5"),
-        ("    2.2  Sentinel-2 Mission and Atmospheric Preprocessing", "6"),
-        ("    2.3  Multi-Temporal Phenology and Vegetation Indices", "7"),
-        ("    2.4  Machine Learning for Crop Type Classification", "8"),
-        ("    2.5  Spatial Cross-Validation and Class Imbalance Challenges", "9"),
-        ("    2.6  Gaps in Existing Literature and Proposed Contribution", "10"),
-        ("CHAPTER 3  METHODOLOGY", "11"),
-        ("    3.1  Study Region and Agricultural Setting", "11"),
-        ("    3.2  Ground Truth Acquisition and Polygon Preprocessing", "12"),
-        ("    3.3  Sentinel-2 Acquisition and Cloud Score+ Masking", "13"),
-        ("    3.4  Multi-Temporal Composite Generation and Feature Engineering", "14"),
-        ("    3.5  Tile-Based Spatial Partitioning and SMOTE Resampling", "15"),
-        ("    3.6  Classification Algorithms Formulation", "16"),
-        ("    3.7  Evaluation Metrics and Spatial Validation Protocol", "17"),
-        ("    3.8  End-to-End Processing Algorithm", "18"),
-        ("CHAPTER 4  EXPERIMENTAL RESULTS AND DISCUSSION", "19"),
-        ("    4.1  Dataset Characteristics and Agronomic Profile", "19"),
-        ("    4.2  Multi-Temporal Phenology Dynamics Analysis", "20"),
-        ("    4.3  Feature Importance and Temporal Discriminability", "22"),
-        ("    4.4  Model Performance and Comparative Evaluation", "24"),
-        ("    4.5  Confusion Matrix and Error Analysis", "25"),
-        ("    4.6  Spatial Crop Map Generation and Visual Inspection", "27"),
-        ("    4.7  Ablation Analysis and Practical Insights", "28"),
-        ("CHAPTER 5  CONCLUSION AND FUTURE WORK", "29"),
-        ("    5.1  Summary of Completed Work", "29"),
-        ("    5.2  Key Technical Insights", "30"),
-        ("    5.3  Limitations of the Study", "30"),
-        ("    5.4  Future Scopes and Extensions", "31"),
-        ("REFERENCES", "32")
-    ]
+    # Front matter items
+    add_toc_entry(doc, "ABSTRACT", "v", level=0, space_before=4, space_after=3)
+    add_toc_entry(doc, "ACKNOWLEDGEMENT", "vi", level=0, space_before=0, space_after=3)
+    add_toc_entry(doc, "LIST OF FIGURES", "viii", level=0, space_before=0, space_after=3)
+    add_toc_entry(doc, "LIST OF TABLES", "ix", level=0, space_before=0, space_after=6)
 
-    tbl_toc = doc.add_table(rows=len(toc_items), cols=2)
-    tbl_toc.alignment = WD_TABLE_ALIGNMENT.CENTER
-    tbl_toc.autofit = False
-    tbl_toc.columns[0].width = Inches(5.5)
-    tbl_toc.columns[1].width = Inches(0.8)
+    # Chapters & Sections
+    add_toc_entry(doc, "CHAPTER 1  INTRODUCTION", "1", level=0, space_before=8, space_after=3)
+    add_toc_entry(doc, "1.1  Background and Motivation", "1", level=1)
+    add_toc_entry(doc, "1.2  Problem Statement", "2", level=1)
+    add_toc_entry(doc, "1.3  Project Objectives", "3", level=1)
+    add_toc_entry(doc, "1.4  Scope and Organization of the Report", "4", level=1)
 
-    for i, (title, page) in enumerate(toc_items):
-        cell_t = tbl_toc.cell(i, 0)
-        cell_p = tbl_toc.cell(i, 1)
-        set_cell_margins(cell_t, top=40, bottom=40, left=60, right=60)
-        set_cell_margins(cell_p, top=40, bottom=40, left=60, right=60)
+    add_toc_entry(doc, "CHAPTER 2  LITERATURE REVIEW", "5", level=0, space_before=8, space_after=3)
+    add_toc_entry(doc, "2.1  Earth Observation in Agricultural Monitoring", "5", level=1)
+    add_toc_entry(doc, "2.2  Sentinel-2 Mission and Atmospheric Preprocessing", "6", level=1)
+    add_toc_entry(doc, "2.3  Multi-Temporal Phenology and Vegetation Indices", "7", level=1)
+    add_toc_entry(doc, "2.4  Machine Learning for Crop Type Classification", "8", level=1)
+    add_toc_entry(doc, "2.5  Spatial Cross-Validation and Class Imbalance Challenges", "9", level=1)
+    add_toc_entry(doc, "2.6  Gaps in Existing Literature and Proposed Contribution", "10", level=1)
 
-        p_t = cell_t.paragraphs[0]
-        p_t.paragraph_format.line_spacing = 1.15
-        p_t.paragraph_format.space_after = Pt(0)
-        run_t = p_t.add_run(title)
-        run_t.font.name = "Times New Roman"
-        run_t.font.size = Pt(11)
-        if "CHAPTER" in title or title in ["ABSTRACT", "ACKNOWLEDGEMENT", "LIST OF FIGURES", "LIST OF TABLES", "REFERENCES"]:
-            run_t.font.bold = True
+    add_toc_entry(doc, "CHAPTER 3  METHODOLOGY", "11", level=0, space_before=8, space_after=3)
+    add_toc_entry(doc, "3.1  Study Region and Agricultural Setting", "11", level=1)
+    add_toc_entry(doc, "3.2  Ground Truth Acquisition and Polygon Preprocessing", "12", level=1)
+    add_toc_entry(doc, "3.3  Sentinel-2 Acquisition and Cloud Score+ Masking", "13", level=1)
+    add_toc_entry(doc, "3.4  Multi-Temporal Composite Generation and Feature Engineering", "14", level=1)
+    add_toc_entry(doc, "3.5  Tile-Based Spatial Partitioning and SMOTE Resampling", "15", level=1)
+    add_toc_entry(doc, "3.6  Classification Algorithms Formulation", "16", level=1)
+    add_toc_entry(doc, "3.7  Evaluation Metrics and Spatial Validation Protocol", "17", level=1)
+    add_toc_entry(doc, "3.8  End-to-End Processing Algorithm", "18", level=1)
 
-        p_p = cell_p.paragraphs[0]
-        p_p.paragraph_format.line_spacing = 1.15
-        p_p.paragraph_format.space_after = Pt(0)
-        p_p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        run_p = p_p.add_run(page)
-        run_p.font.name = "Times New Roman"
-        run_p.font.size = Pt(11)
-        if "CHAPTER" in title or title in ["ABSTRACT", "ACKNOWLEDGEMENT", "LIST OF FIGURES", "LIST OF TABLES", "REFERENCES"]:
-            run_p.font.bold = True
+    add_toc_entry(doc, "CHAPTER 4  EXPERIMENTAL RESULTS AND DISCUSSION", "19", level=0, space_before=8, space_after=3)
+    add_toc_entry(doc, "4.1  Dataset Characteristics and Agronomic Profile", "19", level=1)
+    add_toc_entry(doc, "4.2  Multi-Temporal Phenology Dynamics Analysis", "20", level=1)
+    add_toc_entry(doc, "4.3  Feature Importance and Temporal Discriminability", "22", level=1)
+    add_toc_entry(doc, "4.4  Model Performance and Comparative Evaluation", "24", level=1)
+    add_toc_entry(doc, "4.5  Confusion Matrix and Error Analysis", "25", level=1)
+    add_toc_entry(doc, "4.6  Spatial Crop Map Generation and Visual Inspection", "27", level=1)
+    add_toc_entry(doc, "4.7  Ablation Analysis and Practical Insights", "28", level=1)
+
+    add_toc_entry(doc, "CHAPTER 5  CONCLUSION AND FUTURE WORK", "29", level=0, space_before=8, space_after=3)
+    add_toc_entry(doc, "5.1  Summary of Completed Work", "29", level=1)
+    add_toc_entry(doc, "5.2  Key Technical Insights", "30", level=1)
+    add_toc_entry(doc, "5.3  Limitations of the Study", "30", level=1)
+    add_toc_entry(doc, "5.4  Future Scopes and Extensions", "31", level=1)
+
+    add_toc_entry(doc, "REFERENCES", "32", level=0, space_before=8, space_after=3)
 
     doc.add_page_break()
 
@@ -892,8 +1134,8 @@ def build_project_report():
     add_body_paragraph(
         "To resolve these limitations, Google recently introduced the Cloud Score+ processor (GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED). "
         "Trained on massive global datasets using deep convolutional architectures, Cloud Score+ produces continuous, fine-grained pixel quality "
-        "scores (`cs` and `cs_cdf`) ranging from 0.0 (fully obscured) to 1.0 (pristine surface conditions). Applying a calibrated threshold "
-        "(e.g., cs >= 0.60) in conjunction with quality-driven temporal compositing (`qualityMosaic`) preserves pristine surface reflectance "
+        "scores (cs and cs_cdf) ranging from 0.0 (fully obscured) to 1.0 (pristine surface conditions). Applying a calibrated threshold "
+        "(e.g., cs >= 0.60) in conjunction with quality-driven temporal compositing (qualityMosaic) preserves pristine surface reflectance "
         "without discarding partially clear observations, establishing a superior foundation for temporal feature extraction."
     )
 
@@ -975,9 +1217,10 @@ def build_project_report():
         "To mitigate mixed-pixel contamination, each field polygon was reprojected into the metric Universal Transverse Mercator (UTM Zone 44N, "
         "EPSG:32644) coordinate reference system, and an inward negative geometric buffer of -5.0 meters was applied:"
     )
-    add_body_paragraph(
-        "    P_buffered = P ⊖ d_buffer,    where d_buffer = 5.0 meters        (3.1)"
-    )
+
+    # Equation 3.1: Metric Buffer
+    add_numbered_equation(doc, EQ_BUFFER, "3.1")
+
     add_body_paragraph(
         "Fields smaller than 0.01 hectares that collapsed during buffering were preserved using their original interior centroid to retain "
         "valid training representations. The buffered vectors were then transformed back to geographic WGS84 coordinates for spatial querying."
@@ -988,7 +1231,7 @@ def build_project_report():
         "Multi-temporal satellite imagery was acquired from the Google Earth Engine catalog utilizing the Harmonized Sentinel-2 Level-2A "
         "Surface Reflectance collection (COPERNICUS/S2_SR_HARMONIZED). Surface reflectance values were scaled by a factor of 0.0001 to physical "
         "reflectance units [0.0, 1.0]. Atmospheric masking was achieved by linking each image with its corresponding Google Cloud Score+ "
-        "quality record (GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED). Pixels with a cloud quality score `cs` < 0.60 were masked out."
+        "quality record (GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED). Pixels with a cloud quality score cs < 0.60 were masked out."
     )
 
     add_section_header("3.4", "Multi-Temporal Composite Generation and Feature Engineering")
@@ -998,17 +1241,22 @@ def build_project_report():
         "(Mar 2022), and Window 6 (Apr 2022). For each window, a pixel-wise median composite was generated. For each monthly composite, three "
         "complementary spectral vegetation indices were computed:"
     )
-    add_body_paragraph(
-        "1. Normalized Difference Vegetation Index (NDVI):\n"
-        "    NDVI = (B8_NIR - B4_Red) / (B8_NIR + B4_Red)        (3.2)\n\n"
-        "2. Enhanced Vegetation Index (EVI):\n"
-        "    EVI = 2.5 * (B8_NIR - B4_Red) / (B8_NIR + 6.0 * B4_Red - 7.5 * B2_Blue + 1.0)        (3.3)\n\n"
-        "3. Normalized Difference Water Index (NDWI):\n"
-        "    NDWI = (B8_NIR - B11_SWIR1) / (B8_NIR + B11_SWIR1)        (3.4)"
-    )
+
+    # Equation 3.2: NDVI
+    add_body_paragraph("1. Normalized Difference Vegetation Index (NDVI): Measures canopy chlorophyll absorption via contrasting red and NIR reflectance:")
+    add_numbered_equation(doc, EQ_NDVI, "3.2")
+
+    # Equation 3.3: EVI
+    add_body_paragraph("2. Enhanced Vegetation Index (EVI): Corrects for atmospheric aerosols and canopy background soil scattering:")
+    add_numbered_equation(doc, EQ_EVI, "3.3")
+
+    # Equation 3.4: NDWI
+    add_body_paragraph("3. Normalized Difference Water Index (NDWI): Quantifies leaf mesophyll water content and background soil moisture dynamics:")
+    add_numbered_equation(doc, EQ_NDWI, "3.4")
+
     add_body_paragraph(
         "Stacking three indices across six monthly intervals yielded an 18-dimensional multi-temporal feature vector per spatial unit. "
-        "Zonal statistical reduction (`ee.Reducer.median()`) was executed over each buffered ground truth polygon, collapsing intra-field "
+        "Zonal statistical reduction (ee.Reducer.median()) was executed over each buffered ground truth polygon, collapsing intra-field "
         "pixel variance into a single representative feature vector per field parcel."
     )
 
@@ -1073,8 +1321,13 @@ def build_project_report():
     add_body_paragraph(
         "Due to severe regional class imbalance (Wheat dominating with 707 fields versus 49 Maize fields), the training partition was "
         "resampled using SMOTE (Synthetic Minority Over-sampling Technique). For each minority sample x_i, k = 3 nearest minority neighbors "
-        "were identified in the 18-dimensional feature space, and synthetic instances were interpolated:\n"
-        "    x_new = x_i + λ * (x_zi - x_i),    where λ ~ U(0, 1)        (3.5)\n"
+        "were identified in the 18-dimensional feature space, and synthetic instances were interpolated along feature line segments:"
+    )
+
+    # Equation 3.5: SMOTE
+    add_numbered_equation(doc, EQ_SMOTE, "3.5")
+
+    add_body_paragraph(
         "Crucially, SMOTE was applied exclusively to the training set; the 335 test fields remained entirely pristine to ensure uncompromised "
         "real-world evaluation."
     )
@@ -1085,14 +1338,25 @@ def build_project_report():
     )
     add_body_paragraph(
         "1. Random Forest (RF): An ensemble bagging classifier configured with B = 100 decision trees, maximum tree depth = 12, and square-root "
-        "feature subsampling (m_try = sqrt(18) ≈ 4 features per split). At each node t, the optimal split minimizes the Gini impurity:\n"
-        "    I_G(t) = 1 - Σ_{c=1}^C (p(c|t))^2        (3.6)\n"
-        "Ensemble voting aggregates predictions across individual trees: y_hat = mode{h_b(x)}_{b=1}^B."
+        "feature subsampling (m_try = sqrt(18) ≈ 4 features per split). At each internal decision node t, the optimal split maximizes the "
+        "decrease in Gini impurity:"
+    )
+
+    # Equation 3.6: Gini Impurity
+    add_numbered_equation(doc, EQ_GINI, "3.6")
+
+    add_body_paragraph(
+        "Ensemble voting aggregates probabilistic predictions across all individual trees: y_hat = mode{h_b(x)}_{b=1}^B."
     )
     add_body_paragraph(
         "2. Support Vector Machine (SVM): Constructs a maximum-margin separating hyperplane in a reproducing kernel Hilbert space using the "
-        "Radial Basis Function (RBF) kernel:\n"
-        "    K(x_i, x_j) = exp(-γ * ||x_i - x_j||^2)        (3.7)\n"
+        "Radial Basis Function (RBF) kernel:"
+    )
+
+    # Equation 3.7: RBF Kernel
+    add_numbered_equation(doc, EQ_RBF, "3.7")
+
+    add_body_paragraph(
         "Hyperparameters were configured with regularization parameter C = 10.0 and kernel width parameter γ = 'scale', trained under a "
         "one-vs-rest multi-class scheme."
     )
@@ -1101,8 +1365,13 @@ def build_project_report():
     add_body_paragraph(
         "Model performance was evaluated across five statistical criteria:\n"
         "• Overall Accuracy (OA): Proportion of correctly classified fields across all test samples.\n"
-        "• Cohen's Kappa Coefficient (κ): Quantifies inter-rater agreement adjusted for chance agreement:\n"
-        "    κ = (p_o - p_e) / (1 - p_e)        (3.8)\n"
+        "• Cohen's Kappa Coefficient (κ): Quantifies inter-rater agreement adjusted for chance agreement:"
+    )
+
+    # Equation 3.8: Cohen's Kappa
+    add_numbered_equation(doc, EQ_KAPPA, "3.8")
+
+    add_body_paragraph(
         "• Per-Class Precision, Recall, and F1-Score: Harmonic mean of precision (user's accuracy) and recall (producer's accuracy).\n"
         "• Macro F1-Score: Unweighted average of per-class F1-scores, giving equal prominence to minority classes."
     )
@@ -1264,9 +1533,9 @@ def build_project_report():
     add_body_paragraph(
         "The feature importance ranking provides compelling biophysical validation:\n"
         "• Peak Canopy Windows Dominate: The February and March vegetation indices (Month 4 and Month 5) account for over 52% of total cumulative "
-        "feature importance. In particular, `ndvi_month_4` (February) and `evi_month_4` exhibit the highest individual discriminative power, "
+        "feature importance. In particular, ndvi_month_4 (February) and evi_month_4 exhibit the highest individual discriminative power, "
         "coinciding precisely with the phenological divergence point where Mustard is senescing while Wheat is at maximum canopy biomass.\n"
-        "• Moisture Dynamics Provide Crucial Separation: `ndwi_month_3` (January) and `ndwi_month_4` rank prominently among top features, demonstrating "
+        "• Moisture Dynamics Provide Crucial Separation: ndwi_month_3 (January) and ndwi_month_4 rank prominently among top features, demonstrating "
         "that canopy water content differences between irrigated wheat and less water-intensive mustard provide valuable complementary signals "
         "that optical reflectance alone cannot resolve."
     )
@@ -1392,7 +1661,7 @@ def build_project_report():
         "the posterior probabilities for majority classes consistently dominate, yielding only 1 correctly predicted Maize field (recall 6.7%).\n"
         "• Support Vector Machine Behavior: SVM achieves an overall accuracy of 54.63%, but exhibits dramatically superior sensitivity to minority "
         "decision boundaries. Powered by the RBF kernel and SMOTE margin expansion, SVM successfully identifies 6 out of the 15 test Maize fields, "
-        "achieving a **40.0% Recall** on Maize. This sensitivity incurs a trade-off: 59 Wheat fields are pushed across the boundary into Maize, "
+        "achieving a 40.0% Recall on Maize. This sensitivity incurs a trade-off: 59 Wheat fields are pushed across the boundary into Maize, "
         "lowering Maize precision to 7.3%.\n"
         "• Spatial Autocorrelation Penalty: In literature using random pixel splits, reported accuracies frequently exceed 90%. Under our strict "
         "tile-based spatial validation protocol, test fields originate from independent villages with distinct localized sowing dates, local irrigation "
@@ -1534,10 +1803,16 @@ def build_project_report():
         r_cit.font.size = Pt(11)
 
     # Save finalized document
-    print(f"Saving finalized Word document to {REPORT_PATH}...")
-    doc.save(str(REPORT_PATH))
-    print(f"Report successfully generated and saved to: {REPORT_PATH}")
-    return REPORT_PATH
+    print(f"Saving finalized Word document...")
+    try:
+        doc.save(str(REPORT_PATH))
+        print(f"Report successfully generated and saved to: {REPORT_PATH}")
+        return REPORT_PATH
+    except PermissionError:
+        alt_path = REPORT_DIR / "BTech_Minor_Project_Report_Updated.docx"
+        doc.save(str(alt_path))
+        print(f"[NOTE] '{REPORT_PATH.name}' is currently locked by Microsoft Word. Successfully saved updated report to: {alt_path}")
+        return alt_path
 
 if __name__ == "__main__":
     build_project_report()
